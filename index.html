@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es" id="html-root">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">Herramientas RDF</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- N3.js para parsear RDF Turtle/N3 -->
+    <script src="https://cdn.jsdelivr.net/npm/n3@1.19.0/browser/n3.min.js"></script>
+    <!-- jsonld.js para parsear JSON-LD -->
+    <script src="https://cdn.jsdelivr.net/npm/jsonld@8.3.2/dist/jsonld.min.js"></script>
+    <!-- vis-network para visualización de grafos -->
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <!-- rdflib.js para consultas SPARQL -->
+    <script src="https://cdn.jsdelivr.net/npm/rdflib@2.2.34/dist/rdflib.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="position: relative; width: 100%;">
+                <h1 data-i18n="app-title">Herramientas RDF</h1>
+                <div style="position: absolute; top: 0; right: 0;">
+                    <select id="language-selector" style="padding: 5px 10px; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; background: rgba(255,255,255,0.2); color: white; font-size: 0.9em; cursor: pointer;">
+                        <option value="es" selected>Español</option>
+                        <option value="en">English</option>
+                        <option value="gl">Galego</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <div class="format-selector-container">
+                    <label for="format-selector" data-i18n="format-label">Formato:</label>
+                    <select id="format-selector" class="format-selector">
+                        <option value="turtle" selected>Turtle/N3</option>
+                        <option value="jsonld">JSON-LD</option>
+                    </select>
+                </div>
+                
+                <label for="rdf-input" data-i18n="rdf-code-label">Código RDF:</label>
+                <div class="editor-container">
+                    <div id="line-numbers" class="line-numbers"></div>
+                    <textarea 
+                        id="rdf-input" 
+                        data-i18n-placeholder="rdf-placeholder-turtle"
+                        rows="10"
+                        spellcheck="false"
+                    >@prefix ex: <http://example.org/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+
+ex:john a foaf:Person ;
+    foaf:name "John Doe" ;
+    foaf:knows ex:jane .
+
+ex:jane a foaf:Person ;
+    foaf:name "Jane Smith" ;
+    foaf:knows ex:john .</textarea>
+                </div>
+                <button id="verify-btn" class="verify-button" data-i18n="verify-button">Verificar</button>
+            </div>
+
+            <div id="error-message" class="error-message hidden"></div>
+
+            <div id="results-section" class="results-section hidden">
+                <div class="results-header">
+                    <h2 data-i18n="results-title">Resultados</h2>
+                    <div class="status-badge success" data-i18n="valid-status">✓ Válido</div>
+                </div>
+
+                <div class="results-content">
+                    <div class="triples-section">
+                        <div class="triples-header">
+                            <h3 data-i18n="triples-title">Tripletas RDF</h3>
+                            <button id="triples-fullscreen-btn" class="fullscreen-button" data-i18n-title="fullscreen-enter">
+                                <span class="fullscreen-icon">⛶</span>
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="triples-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="subject-header">Sujeto</th>
+                                        <th data-i18n="predicate-header">Predicado</th>
+                                        <th data-i18n="object-header">Objeto</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="triples-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="graph-section">
+                        <div class="graph-header">
+                            <h3 data-i18n="graph-title">Gráfico de Relaciones</h3>
+                            <div class="graph-controls">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="show-prefixes" checked>
+                                    <span data-i18n="show-full-uris">Mostrar URIs completas</span>
+                                </label>
+                                <button id="fullscreen-btn" class="fullscreen-button" data-i18n-title="fullscreen-enter">
+                                    <span class="fullscreen-icon">⛶</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="graph-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sparql-section" class="sparql-section hidden">
+                <h2 data-i18n="sparql-title">Consultas SPARQL</h2>
+                <p class="sparql-description" data-i18n="sparql-description">Ejecuta consultas SPARQL sobre los datos cargados</p>
+                
+                <div class="sparql-input-section">
+                    <label for="sparql-input" data-i18n="sparql-query-label">Consulta SPARQL:</label>
+                    <div class="sparql-editor-container">
+                        <div id="sparql-line-numbers" class="line-numbers"></div>
+                        <textarea 
+                            id="sparql-input" 
+                            data-i18n-placeholder="sparql-placeholder"
+                            rows="8"
+                            spellcheck="false"
+                        >SELECT ?subject ?predicate ?object
+WHERE {
+  ?subject ?predicate ?object .
+}</textarea>
+                    </div>
+                    <button id="execute-sparql-btn" class="execute-button" data-i18n="execute-query-button">Ejecutar Consulta</button>
+                </div>
+
+                <div id="sparql-error" class="error-message hidden"></div>
+
+                <div id="sparql-results" class="sparql-results hidden">
+                    <h3 data-i18n="query-results-title">Resultados de la Consulta</h3>
+                    <div class="table-container">
+                        <table id="sparql-results-table">
+                            <thead id="sparql-results-thead">
+                            </thead>
+                            <tbody id="sparql-results-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer style="text-align: center; padding: 30px 40px; background: #f8f9fa; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
+            <p style="margin: 0;" data-i18n="license-text">
+                This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Creative Commons Attribution 4.0 International License</a>.
+            </p>
+            <p style="margin: 10px 0 0 0;">
+                Copyright (c) Valentín Barral
+            </p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
