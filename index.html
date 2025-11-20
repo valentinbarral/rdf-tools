@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Herramientas RDF</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Prism.js para resaltado de sintaxis -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
+    
     <!-- N3.js para parsear RDF Turtle/N3 -->
     <script src="https://cdn.jsdelivr.net/npm/n3@1.19.0/browser/n3.min.js"></script>
     <!-- jsonld.js para parsear JSON-LD -->
@@ -13,14 +17,25 @@
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <!-- rdflib.js para consultas SPARQL -->
     <script src="https://cdn.jsdelivr.net/npm/rdflib@2.2.34/dist/rdflib.min.js"></script>
+    
+    <!-- Prism.js scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-turtle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sparql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
             <div style="position: relative; width: 100%;">
                 <h1 data-i18n="app-title">Herramientas RDF</h1>
-                <div style="position: absolute; top: 0; right: 0;">
-                    <select id="language-selector" style="padding: 5px 10px; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; background: rgba(255,255,255,0.2); color: white; font-size: 0.9em; cursor: pointer;">
+                <div class="header-controls">
+                    <select id="theme-selector" class="theme-selector">
+                        <option value="dark" data-i18n-option="theme-dark">Oscuro</option>
+                        <option value="light" data-i18n-option="theme-light">Claro</option>
+                    </select>
+                    <select id="language-selector" class="language-selector">
                         <option value="es" selected>Español</option>
                         <option value="en">English</option>
                         <option value="gl">Galego</option>
@@ -40,15 +55,8 @@
                 </div>
                 
                 <label for="rdf-input" data-i18n="rdf-code-label">Código RDF:</label>
-                <div class="editor-container">
-                    <div id="line-numbers" class="line-numbers"></div>
-                    <textarea 
-                        id="rdf-input" 
-                        data-i18n-placeholder="rdf-placeholder-turtle"
-                        rows="10"
-                        spellcheck="false"
-                    >@prefix ex: <http://example.org/> .
-@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+                <pre class="line-numbers" id="rdf-code-pre"><code class="language-turtle" id="rdf-input" contenteditable="true" spellcheck="false" data-i18n-placeholder="rdf-placeholder-turtle">@prefix ex: &lt;http://example.org/&gt; .
+@prefix foaf: &lt;http://xmlns.com/foaf/0.1/&gt; .
 
 ex:john a foaf:Person ;
     foaf:name "John Doe" ;
@@ -56,9 +64,16 @@ ex:john a foaf:Person ;
 
 ex:jane a foaf:Person ;
     foaf:name "Jane Smith" ;
-    foaf:knows ex:john .</textarea>
+    foaf:knows ex:john .</code></pre>
+                
+                <div class="editor-bottom-controls">
+                    <button id="verify-btn" class="verify-button" data-i18n="verify-button">Verificar</button>
+                    <div class="font-controls">
+                        <button id="decrease-font" class="font-btn" title="Reducir tamaño de letra">A-</button>
+                        <span id="font-size-display">14px</span>
+                        <button id="increase-font" class="font-btn" title="Aumentar tamaño de letra">A+</button>
+                    </div>
                 </div>
-                <button id="verify-btn" class="verify-button" data-i18n="verify-button">Verificar</button>
             </div>
 
             <div id="error-message" class="error-message hidden"></div>
@@ -116,19 +131,19 @@ ex:jane a foaf:Person ;
                 
                 <div class="sparql-input-section">
                     <label for="sparql-input" data-i18n="sparql-query-label">Consulta SPARQL:</label>
-                    <div class="sparql-editor-container">
-                        <div id="sparql-line-numbers" class="line-numbers"></div>
-                        <textarea 
-                            id="sparql-input" 
-                            data-i18n-placeholder="sparql-placeholder"
-                            rows="8"
-                            spellcheck="false"
-                        >SELECT ?subject ?predicate ?object
+                    <pre class="line-numbers" id="sparql-code-pre"><code class="language-sparql" id="sparql-input" contenteditable="true" spellcheck="false" data-i18n-placeholder="sparql-placeholder">SELECT ?subject ?predicate ?object
 WHERE {
   ?subject ?predicate ?object .
-}</textarea>
+}</code></pre>
+                    
+                    <div class="editor-bottom-controls">
+                        <button id="execute-sparql-btn" class="execute-button" data-i18n="execute-query-button">Ejecutar Consulta</button>
+                        <div class="sparql-font-controls">
+                            <button id="decrease-sparql-font" class="font-btn" title="Reducir tamaño de letra">A-</button>
+                            <span id="sparql-font-size-display">14px</span>
+                            <button id="increase-sparql-font" class="font-btn" title="Aumentar tamaño de letra">A+</button>
+                        </div>
                     </div>
-                    <button id="execute-sparql-btn" class="execute-button" data-i18n="execute-query-button">Ejecutar Consulta</button>
                 </div>
 
                 <div id="sparql-error" class="error-message hidden"></div>
@@ -147,11 +162,11 @@ WHERE {
             </div>
         </main>
 
-        <footer style="text-align: center; padding: 30px 40px; background: #f8f9fa; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
-            <p style="margin: 0;" data-i18n="license-text">
-                This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Creative Commons Attribution 4.0 International License</a>.
+        <footer>
+            <p data-i18n="license-text">
+                This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license">Creative Commons Attribution 4.0 International License</a>.
             </p>
-            <p style="margin: 10px 0 0 0;">
+            <p style="margin-top: 10px;">
                 Copyright (c) Valentín Barral
             </p>
         </footer>

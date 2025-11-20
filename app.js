@@ -39,7 +39,9 @@ const translations = {
         'error-empty-sparql': 'Por favor, escribe una consulta SPARQL.',
         'error-execute-query': 'Error al ejecutar la consulta: ',
         'error-jsonld-no-triples': 'El documento JSON-LD no contiene tripletas válidas.',
-        'license-text': 'Este trabajo está licenciado bajo una <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Licencia Creative Commons Atribución 4.0 Internacional</a>.'
+        'license-text': 'Este trabajo está licenciado bajo una <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Licencia Creative Commons Atribución 4.0 Internacional</a>.',
+        'theme-dark': 'Oscuro',
+        'theme-light': 'Claro'
     },
     en: {
         'app-title': 'RDF Tools',
@@ -80,7 +82,9 @@ const translations = {
         'error-empty-sparql': 'Please write a SPARQL query.',
         'error-execute-query': 'Error executing query: ',
         'error-jsonld-no-triples': 'The JSON-LD document does not contain valid triples.',
-        'license-text': 'This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Creative Commons Attribution 4.0 International License</a>.'
+        'license-text': 'This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Creative Commons Attribution 4.0 International License</a>.',
+        'theme-dark': 'Dark',
+        'theme-light': 'Light'
     },
     gl: {
         'app-title': 'Ferramentas RDF',
@@ -121,7 +125,9 @@ const translations = {
         'error-empty-sparql': 'Por favor, escribe unha consulta SPARQL.',
         'error-execute-query': 'Erro ao executar a consulta: ',
         'error-jsonld-no-triples': 'O documento JSON-LD non contén tripletas válidas.',
-        'license-text': 'Este traballo está licenciado baixo unha <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Licenza Creative Commons Atribución 4.0 Internacional</a>.'
+        'license-text': 'Este traballo está licenciado baixo unha <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license" style="color: #667eea; text-decoration: none;">Licenza Creative Commons Atribución 4.0 Internacional</a>.',
+        'theme-dark': 'Escuro',
+        'theme-light': 'Claro'
     }
 };
 
@@ -129,6 +135,8 @@ const translations = {
 let currentLanguage = 'es';
 // Current format (will be set in DOMContentLoaded)
 let currentFormat = 'turtle';
+// Current theme (default: light)
+let currentTheme = 'light';
 
 // Get translation
 function t(key) {
@@ -164,6 +172,12 @@ function updateTranslations() {
         } else {
             element.placeholder = t(key);
         }
+    });
+    
+    // Update option elements with data-i18n-option attribute
+    document.querySelectorAll('[data-i18n-option]').forEach(element => {
+        const key = element.getAttribute('data-i18n-option');
+        element.textContent = t(key);
     });
     
     // Update HTML content for license text (contains HTML)
@@ -211,6 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Elementos del DOM
     const rdfInput = document.getElementById('rdf-input');
+    const rdfCodePre = document.getElementById('rdf-code-pre');
     const verifyBtn = document.getElementById('verify-btn');
     const errorMessage = document.getElementById('error-message');
     const resultsSection = document.getElementById('results-section');
@@ -222,18 +237,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const triplesSection = document.querySelector('.triples-section');
     const showPrefixesCheckbox = document.getElementById('show-prefixes');
     const formatSelector = document.getElementById('format-selector');
-    const lineNumbers = document.getElementById('line-numbers');
     const languageSelector = document.getElementById('language-selector');
+    const themeSelector = document.getElementById('theme-selector');
+    
+    // Font size controls
+    const increaseFontBtn = document.getElementById('increase-font');
+    const decreaseFontBtn = document.getElementById('decrease-font');
+    const fontSizeDisplay = document.getElementById('font-size-display');
+    let currentFontSize = 14;
+    
+    // SPARQL Font size controls
+    const increaseSparqlFontBtn = document.getElementById('increase-sparql-font');
+    const decreaseSparqlFontBtn = document.getElementById('decrease-sparql-font');
+    const sparqlFontSizeDisplay = document.getElementById('sparql-font-size-display');
+    let currentSparqlFontSize = 14;
     
     // Elementos del DOM para SPARQL
     const sparqlSection = document.getElementById('sparql-section');
     const sparqlInput = document.getElementById('sparql-input');
+    const sparqlCodePre = document.getElementById('sparql-code-pre');
     const executeSparqlBtn = document.getElementById('execute-sparql-btn');
     const sparqlError = document.getElementById('sparql-error');
     const sparqlResults = document.getElementById('sparql-results');
     const sparqlResultsThead = document.getElementById('sparql-results-thead');
     const sparqlResultsTbody = document.getElementById('sparql-results-tbody');
-    const sparqlLineNumbers = document.getElementById('sparql-line-numbers');
     
     // Variable para el gráfico
     let network = null;
@@ -249,6 +276,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set initial language attribute
     document.documentElement.lang = currentLanguage;
     
+    // Initialize theme from localStorage (default is dark)
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    currentTheme = savedTheme;
+    if (currentTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+    if (themeSelector) {
+        themeSelector.value = currentTheme;
+    }
+    
     // Language selector event listener
     if (languageSelector) {
         languageSelector.addEventListener('change', (e) => {
@@ -259,38 +296,204 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Theme selector functionality
+    function changeTheme(theme) {
+        currentTheme = theme;
+        if (theme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+        localStorage.setItem('theme', currentTheme);
+    }
+    
+    // Theme selector event listener
+    if (themeSelector) {
+        themeSelector.addEventListener('change', (e) => {
+            changeTheme(e.target.value);
+        });
+    }
+    
     // Variables para SPARQL
     let rdfStore = null; // Store de rdflib para consultas SPARQL
     let datatypeMap = new Map(); // Mapa para almacenar datatypes originales: clave = "sujeto|predicado|valor", valor = datatype
     
-    // Función para actualizar números de línea
-    function updateLineNumbers() {
-        const lines = rdfInput.value.split('\n');
-        const lineCount = lines.length;
-        let lineNumbersHTML = '';
+    // Save cursor position
+    function saveCursorPosition(element) {
+        const selection = window.getSelection();
+        if (selection.rangeCount === 0) return null;
         
-        for (let i = 1; i <= lineCount; i++) {
-            lineNumbersHTML += i + '\n';
+        const range = selection.getRangeAt(0);
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(element);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        const caretOffset = preCaretRange.toString().length;
+        
+        return caretOffset;
+    }
+    
+    // Restore cursor position
+    function restoreCursorPosition(element, caretOffset) {
+        if (caretOffset === null) return;
+        
+        const range = document.createRange();
+        const selection = window.getSelection();
+        
+        let charCount = 0;
+        let nodeStack = [element];
+        let node;
+        let foundStart = false;
+        
+        while (!foundStart && (node = nodeStack.pop())) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const nextCharCount = charCount + node.length;
+                if (caretOffset <= nextCharCount) {
+                    range.setStart(node, caretOffset - charCount);
+                    range.setEnd(node, caretOffset - charCount);
+                    foundStart = true;
+                    break;
+                }
+                charCount = nextCharCount;
+            } else {
+                let i = node.childNodes.length;
+                while (i--) {
+                    nodeStack.push(node.childNodes[i]);
+                }
+            }
         }
         
-        lineNumbers.textContent = lineNumbersHTML;
+        if (foundStart) {
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
     }
     
-    // Sincronizar scroll entre textarea y números de línea
-    function syncScroll() {
-        lineNumbers.scrollTop = rdfInput.scrollTop;
+    // Highlight code with Prism
+    function highlightCode() {
+        if (rdfInput && rdfCodePre) {
+            // Save cursor position before highlighting
+            const cursorPosition = saveCursorPosition(rdfInput);
+            
+            // Apply Prism highlighting
+            Prism.highlightElement(rdfInput);
+            
+            // Restore cursor position after highlighting
+            restoreCursorPosition(rdfInput, cursorPosition);
+        }
     }
     
-    // Inicializar números de línea
-    updateLineNumbers();
+    // Get text content (unescaping HTML entities)
+    function getTextContent() {
+        if (!rdfInput) return '';
+        const text = rdfInput.textContent || rdfInput.innerText || '';
+        return text;
+    }
     
-    // Event listeners para actualizar números de línea
-    rdfInput.addEventListener('input', updateLineNumbers);
-    rdfInput.addEventListener('scroll', syncScroll);
-    rdfInput.addEventListener('keydown', updateLineNumbers);
-    rdfInput.addEventListener('paste', () => {
-        setTimeout(updateLineNumbers, 0);
+    // Initial highlight
+    setTimeout(highlightCode, 100);
+    
+    // Update highlighting on input
+    rdfInput.addEventListener('input', () => {
+        setTimeout(highlightCode, 0);
     });
+    
+    // --- Font Size Logic ---
+    
+    function updateFontSize() {
+        const sizeStr = `${currentFontSize}px`;
+        
+        if (rdfCodePre) {
+            rdfCodePre.style.fontSize = sizeStr;
+        }
+        
+        if (fontSizeDisplay) {
+            fontSizeDisplay.textContent = sizeStr;
+        }
+    }
+    
+    if (increaseFontBtn) {
+        increaseFontBtn.addEventListener('click', () => {
+            if (currentFontSize < 30) {
+                currentFontSize += 1;
+                updateFontSize();
+            }
+        });
+    }
+    
+    if (decreaseFontBtn) {
+        decreaseFontBtn.addEventListener('click', () => {
+            if (currentFontSize > 10) {
+                currentFontSize -= 1;
+                updateFontSize();
+            }
+        });
+    }
+    
+    // --- SPARQL Font Size Logic ---
+    
+    function updateSparqlFontSize() {
+        const sizeStr = `${currentSparqlFontSize}px`;
+        
+        if (sparqlCodePre) {
+            sparqlCodePre.style.fontSize = sizeStr;
+        }
+        
+        if (sparqlFontSizeDisplay) {
+            sparqlFontSizeDisplay.textContent = sizeStr;
+        }
+    }
+    
+    if (increaseSparqlFontBtn) {
+        increaseSparqlFontBtn.addEventListener('click', () => {
+            if (currentSparqlFontSize < 30) {
+                currentSparqlFontSize += 1;
+                updateSparqlFontSize();
+            }
+        });
+    }
+    
+    if (decreaseSparqlFontBtn) {
+        decreaseSparqlFontBtn.addEventListener('click', () => {
+            if (currentSparqlFontSize > 10) {
+                currentSparqlFontSize -= 1;
+                updateSparqlFontSize();
+            }
+        });
+    }
+    
+    // --- SPARQL Syntax Highlighting ---
+    
+    // Highlight SPARQL code with Prism
+    function highlightSparqlCode() {
+        if (sparqlInput && sparqlCodePre) {
+            // Save cursor position before highlighting
+            const cursorPosition = saveCursorPosition(sparqlInput);
+            
+            // Apply Prism highlighting
+            Prism.highlightElement(sparqlInput);
+            
+            // Restore cursor position after highlighting
+            restoreCursorPosition(sparqlInput, cursorPosition);
+        }
+    }
+    
+    // Get SPARQL text content (unescaping HTML entities)
+    function getSparqlTextContent() {
+        if (!sparqlInput) return '';
+        const text = sparqlInput.textContent || sparqlInput.innerText || '';
+        return text;
+    }
+    
+    // Initial highlight for SPARQL
+    setTimeout(highlightSparqlCode, 100);
+    
+    // Update highlighting on input for SPARQL
+    if (sparqlInput) {
+        sparqlInput.addEventListener('input', () => {
+            setTimeout(highlightSparqlCode, 0);
+        });
+    }
     
     // Función para formatear términos RDF
     function formatTerm(term) {
@@ -707,7 +910,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función principal de verificación
     async function handleVerify() {
-        const rdfText = rdfInput.value.trim();
+        const rdfText = getTextContent().trim();
         
         // Ocultar resultados anteriores
         resultsSection.classList.add('hidden');
@@ -743,6 +946,13 @@ document.addEventListener('DOMContentLoaded', function() {
             verifyBtn.disabled = false;
             verifyBtn.textContent = t('verify-button');
         }
+    }
+    
+    // Helper to escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
     // Ejemplos para cada formato
@@ -788,15 +998,15 @@ ex:jane a foaf:Person ;
             
             // Cambiar placeholder y ejemplo
             if (currentFormat === 'turtle') {
-                rdfInput.placeholder = t('rdf-placeholder-turtle');
-                rdfInput.value = examples.turtle;
+                rdfInput.innerHTML = escapeHtml(examples.turtle);
+                rdfInput.className = 'language-turtle';
             } else if (currentFormat === 'jsonld') {
-                rdfInput.placeholder = t('rdf-placeholder-jsonld');
-                rdfInput.value = examples.jsonld;
+                rdfInput.innerHTML = escapeHtml(examples.jsonld);
+                rdfInput.className = 'language-json';
             }
             
-            // Actualizar números de línea
-            updateLineNumbers();
+            // Re-highlight
+            setTimeout(highlightCode, 10);
             
             // Ocultar resultados anteriores
             resultsSection.classList.add('hidden');
@@ -806,35 +1016,6 @@ ex:jane a foaf:Person ;
     }
     
     // ========== FUNCIONES SPARQL ==========
-    
-    // Función para actualizar números de línea de SPARQL
-    function updateSparqlLineNumbers() {
-        const lines = sparqlInput.value.split('\n');
-        const lineCount = lines.length;
-        let lineNumbersHTML = '';
-        
-        for (let i = 1; i <= lineCount; i++) {
-            lineNumbersHTML += i + '\n';
-        }
-        
-        sparqlLineNumbers.textContent = lineNumbersHTML;
-    }
-    
-    // Sincronizar scroll para SPARQL
-    function syncSparqlScroll() {
-        sparqlLineNumbers.scrollTop = sparqlInput.scrollTop;
-    }
-    
-    // Inicializar números de línea para SPARQL
-    updateSparqlLineNumbers();
-    
-    // Event listeners para números de línea SPARQL
-    sparqlInput.addEventListener('input', updateSparqlLineNumbers);
-    sparqlInput.addEventListener('scroll', syncSparqlScroll);
-    sparqlInput.addEventListener('keydown', updateSparqlLineNumbers);
-    sparqlInput.addEventListener('paste', () => {
-        setTimeout(updateSparqlLineNumbers, 0);
-    });
     
     // Función para cargar quads en el store de rdflib
     function loadQuadsIntoStore(quads) {
@@ -1448,7 +1629,7 @@ ex:jane a foaf:Person ;
         
         // Detectar si hay variables que deberían ser resultado de DATATYPE()
         // Buscar en el query original si hay "DATATYPE(...) AS ?variable"
-        const queryString = sparqlInput.value.trim();
+        const queryString = getSparqlTextContent().trim();
         const datatypePattern = /DATATYPE\s*\(\s*\?(\w+)\s*\)\s+AS\s+\?(\w+)/gi;
         const datatypeMappings = {};
         let match;
@@ -1589,7 +1770,7 @@ ex:jane a foaf:Person ;
     
     // Función principal para ejecutar SPARQL
     async function handleExecuteSparql() {
-        const queryString = sparqlInput.value.trim();
+        const queryString = getSparqlTextContent().trim();
         
         // Ocultar resultados anteriores
         sparqlResults.classList.add('hidden');
@@ -1631,6 +1812,7 @@ ex:jane a foaf:Person ;
     // Permitir verificar con Ctrl+Enter
     rdfInput.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
             handleVerify();
         }
     });
