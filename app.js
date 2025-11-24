@@ -1102,13 +1102,41 @@ ex:jane a foaf:Person ;
     
     // Función para aplicar FILTERs manualmente cuando rdflib no los procesa correctamente
     function applyManualFilters(bindings, queryString) {
-        // Detectar FILTERs en la consulta
-        const filterPattern = /FILTER\s*\(\s*([^)]+)\s*\)/gi;
+        // Detectar FILTERs en la consulta (manejando paréntesis anidados con REGEX)
+        const filterPattern = /FILTER\s*\(\s*(.+?)\s*\)\s*(?=\}|FILTER|$)/gi;
         const filters = [];
         let match;
         
-        while ((match = filterPattern.exec(queryString)) !== null) {
-            filters.push(match[1].trim());
+        // Para manejar paréntesis anidados en REGEX, necesitamos un enfoque diferente
+        let tempQuery = queryString;
+        const filterMatches = [];
+        
+        // Buscar todos los FILTER de manera más robusta
+        let startIdx = 0;
+        while (true) {
+            const filterIdx = tempQuery.indexOf('FILTER', startIdx);
+            if (filterIdx === -1) break;
+            
+            // Encontrar el paréntesis de apertura
+            const openParenIdx = tempQuery.indexOf('(', filterIdx);
+            if (openParenIdx === -1) break;
+            
+            // Contar paréntesis para encontrar el cierre correcto
+            let parenCount = 1;
+            let closeParenIdx = openParenIdx + 1;
+            
+            while (closeParenIdx < tempQuery.length && parenCount > 0) {
+                if (tempQuery[closeParenIdx] === '(') parenCount++;
+                else if (tempQuery[closeParenIdx] === ')') parenCount--;
+                closeParenIdx++;
+            }
+            
+            if (parenCount === 0) {
+                const filterContent = tempQuery.substring(openParenIdx + 1, closeParenIdx - 1).trim();
+                filters.push(filterContent);
+            }
+            
+            startIdx = closeParenIdx;
         }
         
         if (filters.length === 0) {
@@ -1122,6 +1150,141 @@ ex:jane a foaf:Person ;
         
         filters.forEach(filterExpr => {
             console.log('Aplicando FILTER:', filterExpr);
+            
+            // Detectar REGEX: REGEX(?variable, "pattern", "flags")
+            const regexPattern = /REGEX\s*\(\s*(\?\w+)\s*,\s*"([^"]+)"\s*(?:,\s*"([^"]*)"\s*)?\)/i;
+            const regexMatch = filterExpr.match(regexPattern);
+            
+            if (regexMatch) {
+                const varName = regexMatch[1].substring(1); // Quitar el ?
+                const pattern = regexMatch[2];
+                const flags = regexMatch[3] || '';
+                
+                console.log(`FILTER REGEX detectado: REGEX(?${varName}, "${pattern}", "${flags}")`);
+                
+                try {
+                    const regex = new RegExp(pattern, flags);
+                    
+                    filteredBindings = filteredBindings.filter(binding => {
+                        const varValue = binding[varName] || binding['?' + varName];
+                        
+                        if (!varValue) {
+                            return false;
+                        }
+                        
+                        // Obtener el valor como string
+                        let stringValue = '';
+                        if (varValue.termType === 'Literal' || varValue.termType === 'literal') {
+                            stringValue = varValue.value;
+                        } else if (varValue.termType === 'NamedNode' || varValue.termType === 'namedNode') {
+                            stringValue = varValue.value || varValue.uri;
+                        } else if (varValue.value) {
+                            stringValue = varValue.value;
+                        } else {
+                            stringValue = varValue.toString();
+                        }
+                        
+                        const matches = regex.test(stringValue);
+                        console.log(`  Testing REGEX "${pattern}" con flags "${flags}" contra "${stringValue}": ${matches}`);
+                        return matches;
+                    });
+                    
+                    console.log(`FILTER REGEX aplicado: ${bindings.length} -> ${filteredBindings.length} resultados`);
+                    return;
+                } catch (error) {
+                    console.error('Error al crear expresión regular:', error);
+                }
+            }
+            
+            // Detectar funciones de conversión de tipo: xsd:date(?var) > "valor"^^xsd:date
+            // Patrón: xsd:tipo(?variable) operador "valor"^^xsd:tipo
+            const typeFunctionPattern = /xsd:(\w+)\s*\(\s*(\?\w+)\s*\)\s*([<>=!]+)\s*"([^"]+)"\s*\^\^\s*xsd:(\w+)/i;
+            const typeFunctionMatch = filterExpr.match(typeFunctionPattern);
+            
+            if (typeFunctionMatch) {
+                const functionType = typeFunctionMatch[1]; // Ej: "date", "dateTime", "integer"
+                const varName = typeFunctionMatch[2].substring(1); // Quitar el ?
+                const operator = typeFunctionMatch[3];
+                const compareValue = typeFunctionMatch[4];
+                const compareType = typeFunctionMatch[5];
+                
+                console.log(`FILTER con función de tipo detectado: xsd:${functionType}(?${varName}) ${operator} "${compareValue}"^^xsd:${compareType}`);
+                
+                filteredBindings = filteredBindings.filter(binding => {
+                    const varValue = binding[varName] || binding['?' + varName];
+                    
+                    if (!varValue || (varValue.termType !== 'Literal' && varValue.termType !== 'literal')) {
+                        console.log(`  Valor no es literal o no existe: ${varName}`);
+                        return false;
+                    }
+                    
+                    const literalValue = varValue.value;
+                    
+                    console.log(`  Comparando fecha/valor: ${literalValue} ${operator} ${compareValue}`);
+                    
+                    // Determinar el tipo de comparación según el tipo de función
+                    let comparison = 0;
+                    
+                    if (functionType === 'date' || functionType === 'dateTime' || compareType === 'date' || compareType === 'dateTime') {
+                        // Comparación de fechas
+                        const dateA = new Date(literalValue);
+                        const dateB = new Date(compareValue);
+                        
+                        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+                            console.log(`  Fechas inválidas: ${literalValue} o ${compareValue}`);
+                            return false;
+                        }
+                        
+                        comparison = dateA.getTime() - dateB.getTime();
+                        console.log(`  Comparación de fechas: ${dateA.toISOString()} vs ${dateB.toISOString()} = ${comparison}`);
+                    } else {
+                        // Comparación numérica
+                        const numA = parseFloat(literalValue);
+                        const numB = parseFloat(compareValue);
+                        
+                        if (isNaN(numA) || isNaN(numB)) {
+                            console.log(`  Valores no numéricos: ${literalValue} o ${compareValue}`);
+                            return false;
+                        }
+                        
+                        comparison = numA - numB;
+                        console.log(`  Comparación numérica: ${numA} vs ${numB} = ${comparison}`);
+                    }
+                    
+                    // Aplicar el operador
+                    let result = false;
+                    switch (operator) {
+                        case '<':
+                            result = comparison < 0;
+                            break;
+                        case '<=':
+                            result = comparison <= 0;
+                            break;
+                        case '>':
+                            result = comparison > 0;
+                            break;
+                        case '>=':
+                            result = comparison >= 0;
+                            break;
+                        case '=':
+                        case '==':
+                            result = comparison === 0;
+                            break;
+                        case '!=':
+                        case '<>':
+                            result = comparison !== 0;
+                            break;
+                        default:
+                            result = true;
+                    }
+                    
+                    console.log(`  Resultado de comparación con operador ${operator}: ${result}`);
+                    return result;
+                });
+                
+                console.log(`FILTER con función de tipo aplicado: ${bindings.length} -> ${filteredBindings.length} resultados`);
+                return;
+            }
             
             // Detectar comparaciones con tipos específicos, ej: ?anio < "1600"^^xsd:gYear
             // El patrón debe capturar: variable, operador, valor, tipo
@@ -1201,7 +1364,7 @@ ex:jane a foaf:Person ;
             }
         });
         
-        console.log(`FILTER aplicado: ${bindings.length} -> ${filteredBindings.length} resultados`);
+        console.log(`FILTERs aplicados: ${bindings.length} -> ${filteredBindings.length} resultados`);
         return filteredBindings;
     }
     
@@ -1454,6 +1617,164 @@ ex:jane a foaf:Person ;
         return uniqueBindings;
     }
     
+    // Función para extraer la cláusula ORDER BY de la consulta
+    function extractOrderBy(queryString) {
+        const orderByMatch = queryString.match(/ORDER\s+BY\s+((?:ASC|DESC)?\s*\(?\s*\?\w+\s*\)?(?:\s*,\s*(?:ASC|DESC)?\s*\(?\s*\?\w+\s*\)?)*)/i);
+        if (!orderByMatch) {
+            return null;
+        }
+        
+        const orderByClause = orderByMatch[1].trim();
+        const orderSpecs = [];
+        
+        // Dividir por comas para múltiples ordenamientos
+        const parts = orderByClause.split(',').map(p => p.trim());
+        
+        parts.forEach(part => {
+            // Detectar ASC o DESC
+            let direction = 'ASC'; // Por defecto ascendente
+            let variable = '';
+            
+            const descMatch = part.match(/DESC\s*\(?\s*(\?\w+)\s*\)?/i);
+            const ascMatch = part.match(/ASC\s*\(?\s*(\?\w+)\s*\)?/i);
+            const simpleMatch = part.match(/(\?\w+)/);
+            
+            if (descMatch) {
+                direction = 'DESC';
+                variable = descMatch[1];
+            } else if (ascMatch) {
+                direction = 'ASC';
+                variable = ascMatch[1];
+            } else if (simpleMatch) {
+                direction = 'ASC';
+                variable = simpleMatch[1];
+            }
+            
+            if (variable) {
+                orderSpecs.push({ variable, direction });
+            }
+        });
+        
+        console.log('ORDER BY extraído:', orderSpecs);
+        return orderSpecs.length > 0 ? orderSpecs : null;
+    }
+    
+    // Función para aplicar ORDER BY manualmente
+    function applyOrderBy(bindings, orderSpecs) {
+        if (!bindings || bindings.length === 0 || !orderSpecs) {
+            return bindings;
+        }
+        
+        const sortedBindings = [...bindings];
+        
+        sortedBindings.sort((a, b) => {
+            for (const spec of orderSpecs) {
+                const varName = spec.variable.startsWith('?') ? spec.variable.substring(1) : spec.variable;
+                const valueA = a[varName] || a['?' + varName];
+                const valueB = b[varName] || b['?' + varName];
+                
+                // Manejar valores nulos
+                if (!valueA && !valueB) continue;
+                if (!valueA) return 1;
+                if (!valueB) return -1;
+                
+                // Obtener valores comparables
+                let compareA, compareB;
+                
+                if (valueA.termType === 'Literal' || valueA.termType === 'literal') {
+                    const datatypeA = getDatatypeFromLiteral(valueA);
+                    
+                    // Si es un tipo de fecha, comparar como fechas
+                    if (datatypeA && (datatypeA.includes('date') || datatypeA.includes('Date') || datatypeA.includes('gYear'))) {
+                        // Intentar parsear como fecha
+                        compareA = new Date(valueA.value);
+                        if (isNaN(compareA.getTime())) {
+                            // Si no es una fecha válida, intentar como número
+                            compareA = parseFloat(valueA.value);
+                            if (isNaN(compareA)) {
+                                // Si no es número, usar como string
+                                compareA = valueA.value;
+                            }
+                        }
+                    } else {
+                        // Intentar como número primero
+                        compareA = parseFloat(valueA.value);
+                        if (isNaN(compareA)) {
+                            compareA = valueA.value; // String
+                        }
+                    }
+                } else {
+                    compareA = valueA.value || valueA.uri || valueA.toString();
+                }
+                
+                if (valueB.termType === 'Literal' || valueB.termType === 'literal') {
+                    const datatypeB = getDatatypeFromLiteral(valueB);
+                    
+                    if (datatypeB && (datatypeB.includes('date') || datatypeB.includes('Date') || datatypeB.includes('gYear'))) {
+                        compareB = new Date(valueB.value);
+                        if (isNaN(compareB.getTime())) {
+                            compareB = parseFloat(valueB.value);
+                            if (isNaN(compareB)) {
+                                compareB = valueB.value;
+                            }
+                        }
+                    } else {
+                        compareB = parseFloat(valueB.value);
+                        if (isNaN(compareB)) {
+                            compareB = valueB.value;
+                        }
+                    }
+                } else {
+                    compareB = valueB.value || valueB.uri || valueB.toString();
+                }
+                
+                // Comparar
+                let comparison = 0;
+                
+                if (compareA instanceof Date && compareB instanceof Date) {
+                    comparison = compareA.getTime() - compareB.getTime();
+                } else if (typeof compareA === 'number' && typeof compareB === 'number') {
+                    comparison = compareA - compareB;
+                } else {
+                    // Comparación de strings
+                    const strA = String(compareA);
+                    const strB = String(compareB);
+                    comparison = strA.localeCompare(strB);
+                }
+                
+                if (comparison !== 0) {
+                    return spec.direction === 'DESC' ? -comparison : comparison;
+                }
+            }
+            return 0;
+        });
+        
+        console.log(`ORDER BY aplicado: ordenados ${sortedBindings.length} resultados`);
+        return sortedBindings;
+    }
+    
+    // Función para extraer el LIMIT de la consulta
+    function extractLimit(queryString) {
+        const limitMatch = queryString.match(/LIMIT\s+(\d+)/i);
+        if (limitMatch) {
+            const limit = parseInt(limitMatch[1]);
+            console.log('LIMIT extraído:', limit);
+            return limit;
+        }
+        return null;
+    }
+    
+    // Función para aplicar LIMIT manualmente
+    function applyLimit(bindings, limit) {
+        if (!bindings || bindings.length === 0 || !limit) {
+            return bindings;
+        }
+        
+        const limitedBindings = bindings.slice(0, limit);
+        console.log(`LIMIT aplicado: ${bindings.length} -> ${limitedBindings.length} resultados`);
+        return limitedBindings;
+    }
+    
     // Función para ejecutar consulta SPARQL
     function executeSparqlQuery(queryString) {
         if (!rdfStore) {
@@ -1473,6 +1794,19 @@ ex:jane a foaf:Person ;
             // Detectar si hay FILTERs con tipos específicos que rdflib puede no procesar correctamente
             const hasTypedFilter = /FILTER\s*\(\s*\?\w+\s*[<>=!]+\s*"[^"]+"\^\^xsd:\w+/i.test(queryString);
             
+            // Detectar si hay FILTERs con REGEX
+            const hasRegexFilter = /FILTER\s*\(\s*REGEX\s*\(/i.test(queryString);
+            
+            // Detectar si hay FILTERs con funciones de conversión de tipo (xsd:date(?var), etc.)
+            const hasTypeFunctionFilter = /FILTER\s*\(\s*xsd:\w+\s*\(\s*\?\w+\s*\)\s*[<>=!]+/i.test(queryString);
+            
+            // Si hay algún tipo de FILTER especial, necesitamos procesamiento manual
+            const hasManualFilter = hasTypedFilter || hasRegexFilter || hasTypeFunctionFilter;
+            
+            // Extraer ORDER BY y LIMIT antes de modificar la consulta
+            const orderSpecs = extractOrderBy(queryString);
+            const limitValue = extractLimit(queryString);
+            
             let queryToExecute = queryString;
             let query;
             
@@ -1490,15 +1824,55 @@ ex:jane a foaf:Person ;
                 
                 const selectClause = 'SELECT ' + selectVarsForQuery.join(' ');
                 queryToExecute = queryString.replace(/SELECT\s+(?:DISTINCT\s+)?[\s\S]+?\s+WHERE/i, selectClause + ' WHERE');
-                // Remover GROUP BY y ORDER BY
-                queryToExecute = queryToExecute.replace(/\s+GROUP\s+BY\s+[\s\S]+?(?=\s+ORDER\s+BY|\s*$)/i, '');
-                queryToExecute = queryToExecute.replace(/\s+ORDER\s+BY\s+[\s\S]+$/i, '');
+                // Remover GROUP BY, ORDER BY y LIMIT
+                queryToExecute = queryToExecute.replace(/\s+GROUP\s+BY\s+[\s\S]+?(?=\s+ORDER\s+BY|\s+LIMIT|\s*$)/i, '');
+                queryToExecute = queryToExecute.replace(/\s+ORDER\s+BY\s+[\s\S]+?(?=\s+LIMIT|\s*$)/i, '');
+                queryToExecute = queryToExecute.replace(/\s+LIMIT\s+\d+/i, '');
+            } else {
+                // Remover ORDER BY y LIMIT de la consulta ya que rdflib no los procesa correctamente
+                queryToExecute = queryToExecute.replace(/\s+ORDER\s+BY\s+[\s\S]+?(?=\s+LIMIT|\s*$)/i, '');
+                queryToExecute = queryToExecute.replace(/\s+LIMIT\s+\d+/i, '');
             }
             
-            if (hasTypedFilter) {
-                console.log('FILTER con tipo detectado, ejecutando consulta sin FILTER primero...');
-                // Remover el FILTER de la consulta temporalmente
-                queryToExecute = queryToExecute.replace(/FILTER\s*\([^)]+\)/gi, '').trim();
+            if (hasManualFilter) {
+                console.log('FILTER especial detectado (tipado o REGEX), ejecutando consulta sin FILTER primero...');
+                // Remover los FILTERs de la consulta temporalmente (manejo de paréntesis anidados)
+                let tempQuery = queryToExecute;
+                let result = '';
+                let idx = 0;
+                
+                while (idx < tempQuery.length) {
+                    const filterIdx = tempQuery.indexOf('FILTER', idx);
+                    if (filterIdx === -1) {
+                        result += tempQuery.substring(idx);
+                        break;
+                    }
+                    
+                    // Agregar el texto antes del FILTER
+                    result += tempQuery.substring(idx, filterIdx);
+                    
+                    // Encontrar el paréntesis de apertura
+                    const openParenIdx = tempQuery.indexOf('(', filterIdx);
+                    if (openParenIdx === -1) {
+                        result += tempQuery.substring(filterIdx);
+                        break;
+                    }
+                    
+                    // Contar paréntesis para encontrar el cierre correcto
+                    let parenCount = 1;
+                    let closeParenIdx = openParenIdx + 1;
+                    
+                    while (closeParenIdx < tempQuery.length && parenCount > 0) {
+                        if (tempQuery[closeParenIdx] === '(') parenCount++;
+                        else if (tempQuery[closeParenIdx] === ')') parenCount--;
+                        closeParenIdx++;
+                    }
+                    
+                    // Saltar todo el FILTER
+                    idx = closeParenIdx;
+                }
+                
+                queryToExecute = result.trim();
                 // Limpiar líneas vacías y espacios extra
                 queryToExecute = queryToExecute.replace(/\n\s*\n/g, '\n');
             }
@@ -1515,7 +1889,7 @@ ex:jane a foaf:Person ;
             console.log('Results antes de procesamiento manual:', results);
             
             // Aplicar FILTERs manualmente si es necesario
-            if (hasTypedFilter && results && results.length > 0) {
+            if (hasManualFilter && results && results.length > 0) {
                 results = applyManualFilters(results, queryString);
             }
             
@@ -1527,6 +1901,16 @@ ex:jane a foaf:Person ;
             // Aplicar DISTINCT manualmente si es necesario
             if (hasDistinct && results && results.length > 0 && selectVars) {
                 results = applyDistinct(results, selectVars);
+            }
+            
+            // Aplicar ORDER BY manualmente si es necesario
+            if (orderSpecs && results && results.length > 0) {
+                results = applyOrderBy(results, orderSpecs);
+            }
+            
+            // Aplicar LIMIT manualmente si es necesario
+            if (limitValue && results && results.length > 0) {
+                results = applyLimit(results, limitValue);
             }
             
             console.log('Results después de procesamiento manual:', results);
