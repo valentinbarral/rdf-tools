@@ -1,10 +1,17 @@
 <!DOCTYPE html>
-<html lang="es" id="html-root">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Herramientas RDF</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Prevent FOUC — apply dark class immediately before page renders -->
+    <script>
+      (function() {
+        var theme = localStorage.getItem('theme') || 'dark';
+        if (theme === 'dark') document.body.classList.add('dark');
+      })();
+    </script>
     <!-- Prism.js para resaltado de sintaxis -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
@@ -26,24 +33,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div style="position: relative; width: 100%;">
-                <h1 data-i18n="app-title">Herramientas RDF</h1>
-                <div class="header-controls">
-                    <select id="theme-selector" class="theme-selector">
-                        <option value="dark" data-i18n-option="theme-dark">Oscuro</option>
-                        <option value="light" data-i18n-option="theme-light">Claro</option>
-                    </select>
-                    <select id="language-selector" class="language-selector">
-                        <option value="es" selected>Español</option>
-                        <option value="en">English</option>
-                        <option value="gl">Galego</option>
-                    </select>
-                </div>
-            </div>
-        </header>
+    <header>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menú">☰</button>
+        <h1 data-i18n="app-title">Herramientas RDF</h1>
+        <nav class="header-controls" id="headerControls">
+            <button class="theme-btn" onclick="toggleTheme()">🌓</button>
+            <select class="lang-sel" onchange="changeLang(this.value)" id="langSelect">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+                <option value="gl">Galego</option>
+            </select>
+        </nav>
+    </header>
 
+    <div class="container">
         <main>
             <div class="input-section">
                 <div class="format-selector-container">

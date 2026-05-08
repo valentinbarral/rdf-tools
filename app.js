@@ -135,8 +135,35 @@ const translations = {
 let currentLanguage = 'es';
 // Current format (will be set in DOMContentLoaded)
 let currentFormat = 'turtle';
-// Current theme (default: light)
-let currentTheme = 'light';
+
+// --- Global UI functions (called from HTML onclick) ---
+
+function toggleTheme() {
+    const isDark = document.body.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}
+
+function toggleMenu() {
+    const controls = document.getElementById('headerControls');
+    if (controls) controls.classList.toggle('open');
+}
+
+function changeLang(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('lang', lang);
+    document.documentElement.lang = lang;
+    updateTranslations();
+}
+
+// Close hamburger dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const controls = document.getElementById('headerControls');
+    const hamburger = document.querySelector('.hamburger');
+    if (!controls || !hamburger) return;
+    if (!controls.contains(e.target) && e.target !== hamburger && !hamburger.contains(e.target)) {
+        controls.classList.remove('open');
+    }
+});
 
 // Get translation
 function t(key) {
@@ -237,8 +264,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const triplesSection = document.querySelector('.triples-section');
     const showPrefixesCheckbox = document.getElementById('show-prefixes');
     const formatSelector = document.getElementById('format-selector');
-    const languageSelector = document.getElementById('language-selector');
-    const themeSelector = document.getElementById('theme-selector');
+    const languageSelector = document.getElementById('langSelect');
     
     // Font size controls
     const increaseFontBtn = document.getElementById('increase-font');
@@ -273,46 +299,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize translations
     updateTranslations();
     
-    // Set initial language attribute
+    // Restore language from localStorage
+    const savedLang = localStorage.getItem('lang') || 'es';
+    currentLanguage = savedLang;
     document.documentElement.lang = currentLanguage;
-    
-    // Initialize theme from localStorage (default is dark)
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    currentTheme = savedTheme;
-    if (currentTheme === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-    }
-    if (themeSelector) {
-        themeSelector.value = currentTheme;
-    }
-    
-    // Language selector event listener
     if (languageSelector) {
-        languageSelector.addEventListener('change', (e) => {
-            currentLanguage = e.target.value;
-            updateTranslations();
-            // Update document language attribute
-            document.documentElement.lang = currentLanguage;
-        });
+        languageSelector.value = currentLanguage;
     }
+    updateTranslations();
     
-    // Theme selector functionality
-    function changeTheme(theme) {
-        currentTheme = theme;
-        if (theme === 'light') {
-            document.documentElement.setAttribute('data-theme', 'light');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
-        localStorage.setItem('theme', currentTheme);
-    }
-    
-    // Theme selector event listener
-    if (themeSelector) {
-        themeSelector.addEventListener('change', (e) => {
-            changeTheme(e.target.value);
-        });
-    }
+    // Theme is already applied by the inline <script> in <head> — no further init needed
     
     // Variables para SPARQL
     let rdfStore = null; // Store de rdflib para consultas SPARQL
